@@ -1018,8 +1018,11 @@
       html += '<div class="card" style="max-width:560px"><div class="card-head"><h2>Data & Backup</h2></div><div class="card-body">' +
         '<p class="mini muted" style="margin:0 0 14px;line-height:1.5">Your data is stored in this browser on this device. <strong>Back up regularly</strong> and keep the file safe — clearing browser data or switching devices will otherwise lose your records.</p>' +
         '<div class="pill-row"><button class="btn btn-primary" id="setBackup">⬇ Download Backup</button>' +
+        '<button class="btn btn-outline" id="setBackupCopy">⧉ Copy Backup</button>' +
         '<button class="btn btn-outline" id="setRestore">⬆ Restore from File</button>' +
+        '<button class="btn btn-outline" id="setPaste">⌨ Paste to Restore</button>' +
         '<button class="btn btn-danger" id="setReset">Reset All Data</button></div>' +
+        '<p class="mini muted" style="margin:12px 0 0">Tip: “Download” saves a file on a normal browser. If you’re using the in-app preview and the download doesn’t start, use “Copy Backup” instead and paste it somewhere safe.</p>' +
         '<input type="file" id="setRestoreFile" accept="application/json" hidden>' +
         "</div></div>";
       return html;
@@ -1038,6 +1041,8 @@
         render();
       };
       el("setBackup").onclick = doBackup;
+      el("setBackupCopy").onclick = doBackupCopy;
+      el("setPaste").onclick = openPasteRestore;
       el("setRestore").onclick = function () { el("setRestoreFile").click(); };
       el("setRestoreFile").onchange = function (e) { handleRestore(e.target.files[0]); };
       el("setReset").onclick = function () {
@@ -1076,6 +1081,42 @@
     URL.revokeObjectURL(url);
     toast("Backup downloaded");
   }
+  function doBackupCopy() {
+    var json = S.exportJSON();
+    function fallback() {
+      openModal(
+        '<div class="modal-head"><h2>Copy your backup</h2><button class="close-x" data-close>&times;</button></div>' +
+        '<div class="modal-body"><p class="mini muted" style="margin:0 0 10px">Select all and copy this text, then paste it into a safe note or file (save it as <strong>herbhub-backup.json</strong>).</p>' +
+        '<textarea id="backupText" readonly style="width:100%;height:220px;font-family:monospace;font-size:12px">' + esc(json) + "</textarea></div>" +
+        '<div class="modal-foot"><button class="btn btn-primary" data-close>Done</button></div>'
+      );
+      var ta = el("backupText"); if (ta) { ta.focus(); ta.select(); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(json).then(function () { toast("Backup copied to clipboard"); }, fallback);
+    } else { fallback(); }
+  }
+
+  function openPasteRestore() {
+    openModal(
+      '<div class="modal-head"><h2>Restore from pasted backup</h2><button class="close-x" data-close>&times;</button></div>' +
+      '<div class="modal-body"><p class="mini muted" style="margin:0 0 10px">Paste the contents of a HerbHub backup below. This replaces all current data.</p>' +
+      '<textarea id="pasteText" placeholder="Paste backup JSON here…" style="width:100%;height:200px;font-family:monospace;font-size:12px"></textarea></div>' +
+      '<div class="modal-foot"><button class="btn btn-outline" data-close>Cancel</button><button class="btn btn-danger" id="pasteRestoreBtn">Restore</button></div>'
+    );
+    el("pasteRestoreBtn").onclick = function () {
+      var txt = el("pasteText").value.trim();
+      if (!txt) { toast("Paste a backup first", true); return; }
+      try {
+        S.importJSON(txt);
+        el("clinicName").textContent = S.settings().clinicName;
+        closeModal();
+        toast("Data restored");
+        setView("dashboard");
+      } catch (err) { toast(err.message || "That doesn't look like a valid backup", true); }
+    };
+  }
+
   function handleRestore(file) {
     if (!file) return;
     var reader = new FileReader();

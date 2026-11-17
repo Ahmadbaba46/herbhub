@@ -31,11 +31,37 @@ it on** (via `localStorage`). That means:
 - Clearing your browser data, or using a different browser/device, will show an
   empty app.
 
-👉 **Back up regularly** using the **Backup** button and keep the file somewhere
-safe. To move to a new device, open HerbHub there and use **Restore**.
+👉 **Back up regularly** and keep the backup somewhere safe. In **Settings →
+Data & Backup** you have two ways to back up and restore, so it works on any
+host (including environments that block downloads):
+
+- **Download Backup** / **Restore from File** — saves/loads a `.json` file
+  (works on a normal web browser or the local file).
+- **Copy Backup** / **Paste to Restore** — copies the backup text to your
+  clipboard (paste it into a note or file) and restores from pasted text.
+  Use this if a download doesn't start.
 
 If you later want multi-device access with automatic sync, this can be upgraded
-to use a hosted database — ask and it can be set up.
+to use a hosted database — just ask.
+
+## Deploying it online
+
+**Option 1 — GitHub Pages (free, permanent URL on your repo)**
+1. Push this project to GitHub (already done on your branch).
+2. In the repo: **Settings → Pages**.
+3. Under **Source**, choose **Deploy from a branch**.
+4. Pick the branch that has this code and folder **`/ (root)`**, then **Save**.
+5. After ~1 minute your site is live at
+   `https://<your-username>.github.io/herbhub/`.
+
+Everything (including Download/Restore backups) works on GitHub Pages.
+
+**Option 2 — single-file version**
+Run the build to get one self-contained file you can host anywhere, email, or
+double-click to open:
+```bash
+node scripts/build-standalone.js   # creates dist/herbhub.html
+```
 
 ## Running it
 
