@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HerbHub — Herbal Practice Manager</title>
+  <meta name="description" content="Manage patients, remedies, visits and income for your herbal practice." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BF%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-logo">🌿</span>
+        <div class="brand-text">
+          <span class="brand-name" id="clinicName">HerbHub</span>
+          <span class="brand-sub">Practice Manager</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-ico">📊</span> Dashboard</button>
+        <button class="nav-item" data-view="patients"><span class="nav-ico">👤</span> Patients</button>
+        <button class="nav-item" data-view="remedies"><span class="nav-ico">🧪</span> Remedies</button>
+        <button class="nav-item" data-view="visits"><span class="nav-ico">📋</span> Visits</button>
+        <button class="nav-item" data-view="settings"><span class="nav-ico">⚙️</span> Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost btn-block" id="backupBtn">⬇ Backup</button>
+        <button class="btn btn-ghost btn-block" id="restoreBtn">⬆ Restore</button>
+        <input type="file" id="restoreFile" accept="application/json" hidden />
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+        <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <div class="topbar-actions" id="topbarActions"></div>
+      </header>
+      <section class="content" id="content"></section>
+    </main>
+  </div>
+
+  <!-- Modal host -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <!-- Toast host -->
+  <div class="toast-host" id="toastHost"></div>
+
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
