@@ -9,7 +9,8 @@
     settings: { clinicName: "HerbHub", currency: "$", nextIds: {} },
     patients: [],
     remedies: [],
-    visits: []
+    visits: [],
+    appointments: []
   };
 
   function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
@@ -25,6 +26,7 @@
       data.patients = data.patients || [];
       data.remedies = data.remedies || [];
       data.visits = data.visits || [];
+      data.appointments = data.appointments || [];
       return data;
     } catch (e) {
       console.error("HerbHub: failed to load data", e);
@@ -81,6 +83,7 @@
     deletePatient: function (id) {
       _data.patients = _data.patients.filter(function (p) { return p.id !== id; });
       _data.visits = _data.visits.filter(function (v) { return v.patientId !== id; });
+      _data.appointments = _data.appointments.filter(function (a) { return a.patientId !== id; });
       persist();
     },
 
@@ -129,6 +132,30 @@
       persist();
     },
 
+    /* ---- appointments ---- */
+    appointments: function () { return _data.appointments.slice(); },
+    getAppointment: function (id) { return _data.appointments.find(function (a) { return a.id === id; }) || null; },
+    appointmentsForPatient: function (patientId) {
+      return _data.appointments.filter(function (a) { return a.patientId === patientId; });
+    },
+    addAppointment: function (a) {
+      var rec = Object.assign({ id: genId("a"), status: "scheduled", createdAt: nowISO() }, a);
+      _data.appointments.push(rec);
+      persist();
+      return rec;
+    },
+    updateAppointment: function (id, patch) {
+      var a = this.getAppointment(id);
+      if (!a) return null;
+      Object.assign(a, patch);
+      persist();
+      return a;
+    },
+    deleteAppointment: function (id) {
+      _data.appointments = _data.appointments.filter(function (a) { return a.id !== id; });
+      persist();
+    },
+
     /* ---- backup / restore ---- */
     exportJSON: function () { return JSON.stringify(_data, null, 2); },
     importJSON: function (json) {
@@ -141,6 +168,7 @@
       incoming.patients = incoming.patients || [];
       incoming.remedies = incoming.remedies || [];
       incoming.visits = incoming.visits || [];
+      incoming.appointments = incoming.appointments || [];
       _data = incoming;
       persist();
       return _data;

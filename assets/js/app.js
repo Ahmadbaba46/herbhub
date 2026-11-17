@@ -31,6 +31,42 @@
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
+  function todayStr() { return todayInput(); }
+  function dayDiff(dateStr) {
+    // whole-day difference from today (negative = past)
+    var d = new Date(dateStr + "T00:00:00");
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    return Math.round((d - t) / 86400000);
+  }
+  function relDay(dateStr) {
+    var diff = dayDiff(dateStr);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff === -1) return "Yesterday";
+    if (diff > 1 && diff <= 7) return "In " + diff + " days";
+    if (diff < -1) return Math.abs(diff) + " days ago";
+    return fmtDate(dateStr);
+  }
+  function fmtTime(t) {
+    if (!t) return "";
+    var parts = String(t).split(":");
+    var h = parseInt(parts[0], 10); if (isNaN(h)) return esc(t);
+    var m = parts[1] || "00";
+    var ap = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ":" + m + " " + ap;
+  }
+  function apptStatusBadge(a) {
+    if (a.status === "completed") return '<span class="badge badge-paid">Completed</span>';
+    if (a.status === "cancelled") return '<span class="badge badge-unpaid">Cancelled</span>';
+    // scheduled
+    var diff = dayDiff(a.date);
+    if (diff < 0) return '<span class="badge badge-partial">Overdue</span>';
+    if (diff === 0) return '<span class="badge badge-partial">Today</span>';
+    return '<span class="badge badge-paid" style="background:var(--green-100);color:var(--green-700)">Scheduled</span>';
+  }
+  function apptSortKey(a) { return (a.date || "") + "T" + (a.time || "99:99"); }
+
   function initials(name) {
     var parts = String(name || "?").trim().split(/\s+/);
     return ((parts[0] || "")[0] || "") + ((parts[1] || "")[0] || "");
@@ -143,6 +179,33 @@
         statCard("Total Charged", money(t.charge), "", "Billed across all visits") +
         "</div>";
 
+      // upcoming appointments / reminders
+      var appts = S.appointments();
+      var reminders = appts.filter(function (a) { return a.status === "scheduled" && dayDiff(a.date) <= 14; })
+        .sort(function (a, b) { return apptSortKey(a).localeCompare(apptSortKey(b)); });
+      if (reminders.length) {
+        var overdueCount = reminders.filter(function (a) { return dayDiff(a.date) < 0; }).length;
+        var todayCount = reminders.filter(function (a) { return dayDiff(a.date) === 0; }).length;
+        html += '<div class="card"><div class="card-head"><h2>📅 Appointments & Reminders</h2>' +
+          '<button class="btn btn-primary btn-sm" id="dashNewAppt">+ Book</button></div>';
+        if (overdueCount || todayCount) {
+          html += '<div class="card-body" style="padding-bottom:0"><div class="pill-row">' +
+            (todayCount ? '<span class="badge badge-partial">' + todayCount + " today</span>" : "") +
+            (overdueCount ? '<span class="badge badge-unpaid">' + overdueCount + " overdue</span>" : "") +
+            "</div></div>";
+        }
+        html += '<div class="table-wrap"><table class="data"><thead><tr><th>When</th><th>Patient</th><th>Reason</th><th>Status</th></tr></thead><tbody>';
+        reminders.slice(0, 6).forEach(function (a) {
+          var p = S.getPatient(a.patientId);
+          html += '<tr class="row-click" data-appt="' + a.id + '">' +
+            "<td><strong>" + esc(relDay(a.date)) + "</strong>" + (a.time ? " · " + esc(fmtTime(a.time)) : "") + "</td>" +
+            "<td>" + esc(p ? p.name : "—") + "</td>" +
+            '<td class="mini">' + (a.reason ? esc(a.reason) : '<span class="muted">—</span>') + "</td>" +
+            "<td>" + apptStatusBadge(a) + "</td></tr>";
+        });
+        html += "</tbody></table></div></div>";
+      }
+
       // recent visits card
       html += '<div class="card"><div class="card-head"><h2>Recent Visits</h2>' +
         '<button class="btn btn-primary btn-sm" id="dashNewVisit">+ New Visit</button></div>';
@@ -177,8 +240,13 @@
     mount: function () {
       var nv = el("dashNewVisit");
       if (nv) nv.onclick = function () { openVisitForm(null, null); };
+      var na = el("dashNewAppt");
+      if (na) na.onclick = function () { openApptForm(null, null); };
       document.querySelectorAll("[data-visit]").forEach(function (row) {
         row.onclick = function () { openVisitForm(row.dataset.visit, null); };
+      });
+      document.querySelectorAll("[data-appt]").forEach(function (row) {
+        row.onclick = function () { openApptForm(row.dataset.appt, null); };
       });
       document.querySelectorAll("[data-patient]").forEach(function (row) {
         row.onclick = function () { setView("patients", { selected: row.dataset.patient }); };
@@ -278,6 +346,7 @@
 
     el("topbarActions").innerHTML =
       '<button class="btn btn-outline" id="editPatientBtn">Edit</button>' +
+      '<button class="btn btn-outline" id="bookApptBtn">+ Appointment</button>' +
       '<button class="btn btn-primary" id="newVisitBtn">+ New Visit</button>';
 
     var visits = S.visitsForPatient(p.id).sort(function (a, b) {
@@ -306,6 +375,22 @@
       statCard("Balance Owed", money(t.balance), t.balance > 0 ? "warn" : "", "") +
       "</div>";
 
+    // patient appointments
+    var pAppts = S.appointmentsForPatient(p.id);
+    var upc = pAppts.filter(function (a) { return a.status === "scheduled"; })
+      .sort(function (a, b) { return apptSortKey(a).localeCompare(apptSortKey(b)); });
+    if (upc.length) {
+      html += '<div class="card"><div class="card-head"><h2>Upcoming Appointments (' + upc.length + ')</h2></div><div class="table-wrap"><table class="data"><thead><tr><th>When</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>';
+      upc.forEach(function (a) {
+        html += '<tr class="row-click" data-appt="' + a.id + '">' +
+          "<td><strong>" + esc(relDay(a.date)) + "</strong>" + (a.time ? " · " + esc(fmtTime(a.time)) : "") + '<div class="mini muted">' + fmtDate(a.date) + "</div></td>" +
+          '<td class="mini">' + (a.reason ? esc(a.reason) : '<span class="muted">—</span>') + "</td>" +
+          "<td>" + apptStatusBadge(a) + "</td>" +
+          '<td class="num"><button class="btn btn-outline btn-sm" data-done="' + a.id + '">✓ Done</button></td></tr>';
+      });
+      html += "</tbody></table></div></div>";
+    }
+
     html += '<div class="card"><div class="card-head"><h2>Visit History (' + visits.length + ')</h2></div>';
     if (visits.length === 0) {
       html += '<div class="card-body"><p class="muted" style="margin:0">No visits recorded yet. Click “New Visit” to add one.</p></div>';
@@ -333,6 +418,8 @@
     var back = el("backPatients"); if (back) back.onclick = function () { setView("patients", {}); };
     var edit = el("editPatientBtn"); if (edit) edit.onclick = function () { openPatientForm(id); };
     var nv = el("newVisitBtn"); if (nv) nv.onclick = function () { openVisitForm(null, id); };
+    var ba = el("bookApptBtn"); if (ba) ba.onclick = function () { openApptForm(null, id); };
+    bindApptRows();
     document.querySelectorAll("[data-visit]").forEach(function (row) {
       row.onclick = function (e) {
         if (e.target.closest("[data-delv]")) return;
@@ -555,6 +642,7 @@
     var visitDate = existing ? (existing.date || todayInput()) : todayInput();
     var amountPaid = existing ? (existing.amountPaid || 0) : 0;
     var visitNotes = existing ? (existing.notes || "") : "";
+    var followUpDate = existing ? (existing.followUpDate || "") : "";
 
     var patientOptions = patients.map(function (p) {
       return '<option value="' + p.id + '"' + (p.id === patientId ? " selected" : "") + ">" + esc(p.name) + "</option>";
@@ -584,7 +672,8 @@
       field("Balance", '<input id="vBalance" readonly style="font-weight:700" value="">') +
       "</div>" +
       '<div class="pill-row" style="margin-top:8px"><button class="btn btn-sm btn-outline" id="vPayFull">Mark fully paid</button><button class="btn btn-sm btn-outline" id="vPayNone">Clear</button></div>' +
-      field("Visit notes", '<textarea id="vNotes" placeholder="Diagnosis, advice, follow-up…">' + esc(visitNotes) + "</textarea>", true) +
+      field("Visit notes", '<textarea id="vNotes" placeholder="Diagnosis, advice…">' + esc(visitNotes) + "</textarea>", true) +
+      field("📅 Schedule a follow-up (optional)", '<input id="vFollowUp" type="date" value="' + esc(followUpDate) + '"><span class="hint">Creates a scheduled appointment for this patient.</span>', true) +
       "</div>" +
       '<div class="modal-foot">' +
       (isEdit ? '<button class="btn btn-danger" id="vDelete" style="margin-right:auto">Delete</button>' : "") +
@@ -679,7 +768,8 @@
         patientId: el0("vPatient", patientId),
         date: el0("vDate", visitDate),
         paid: el0("vPaid", amountPaid),
-        notes: el0("vNotes", visitNotes)
+        notes: el0("vNotes", visitNotes),
+        followUp: el0("vFollowUp", followUpDate)
       };
       closeModal();
       reopenVisit(visitId, lockPatientId, snapshot);
@@ -701,15 +791,36 @@
         confirmDialog({ title: "Save empty visit?", message: "This visit has no remedies. Save it anyway?", confirm: "Save" }, doSave);
       } else { doSave(); }
       function doSave() {
+        var fuDate = el("vFollowUp").value || "";
+        var prevApptId = existing ? existing.followUpApptId : null;
+        var followUpApptId = prevApptId || null;
+
         var data = {
           patientId: pid,
           date: el("vDate").value || todayInput(),
           items: items,
           amountPaid: parseFloat(el("vPaid").value) || 0,
-          notes: el("vNotes").value.trim()
+          notes: el("vNotes").value.trim(),
+          followUpDate: fuDate
         };
-        if (isEdit) { S.updateVisit(visitId, data); toast("Visit updated"); }
-        else { S.addVisit(data); toast("Visit saved"); }
+
+        // reconcile the linked follow-up appointment
+        if (fuDate) {
+          if (prevApptId && S.getAppointment(prevApptId)) {
+            S.updateAppointment(prevApptId, { patientId: pid, date: fuDate });
+          } else {
+            var appt = S.addAppointment({ patientId: pid, date: fuDate, reason: "Follow-up visit", status: "scheduled" });
+            followUpApptId = appt.id;
+          }
+        } else if (prevApptId && S.getAppointment(prevApptId)) {
+          // follow-up cleared -> remove the appointment we created
+          S.deleteAppointment(prevApptId);
+          followUpApptId = null;
+        }
+        data.followUpApptId = followUpApptId;
+
+        if (isEdit) { S.updateVisit(visitId, data); toast(fuDate ? "Visit saved · follow-up booked" : "Visit updated"); }
+        else { S.addVisit(data); toast(fuDate ? "Visit saved · follow-up booked" : "Visit saved"); }
         closeModal();
         render();
       }
@@ -735,6 +846,7 @@
       if (el("vDate")) el("vDate").value = snap.date;
       if (el("vPaid")) el("vPaid").value = snap.paid;
       if (el("vNotes")) el("vNotes").value = snap.notes;
+      if (el("vFollowUp")) el("vFollowUp").value = snap.followUp || "";
       recalc();
     } else {
       renderItems();
@@ -744,6 +856,146 @@
   function reopenVisit(visitId, lockPatientId, snapshot) {
     openVisitForm._restore = snapshot;
     openVisitForm(visitId, lockPatientId);
+  }
+
+  // ---------- Appointments ----------
+  views.appointments = {
+    title: function () { return "Appointments"; },
+    render: function () {
+      el("topbarActions").innerHTML = '<button class="btn btn-primary" id="addApptBtn">+ New Appointment</button>';
+      var appts = S.appointments();
+      if (appts.length === 0) {
+        return emptyState("📅", "No appointments yet", "Schedule a patient appointment or follow-up to keep track of who's coming in.", "New Appointment", "addApptEmpty");
+      }
+      var upcoming = appts.filter(function (a) { return a.status === "scheduled" && dayDiff(a.date) >= 0; })
+        .sort(function (a, b) { return apptSortKey(a).localeCompare(apptSortKey(b)); });
+      var overdue = appts.filter(function (a) { return a.status === "scheduled" && dayDiff(a.date) < 0; })
+        .sort(function (a, b) { return apptSortKey(b).localeCompare(apptSortKey(a)); });
+      var past = appts.filter(function (a) { return a.status !== "scheduled"; })
+        .sort(function (a, b) { return apptSortKey(b).localeCompare(apptSortKey(a)); });
+
+      var html = "";
+      if (overdue.length) html += apptCard("⚠️ Overdue / Missed", overdue, true);
+      html += apptCard("Upcoming", upcoming, false, "No upcoming appointments.");
+      if (past.length) html += apptCard("Past & Cancelled", past.slice(0, 30), false);
+      return html;
+    },
+    mount: function () {
+      var add = el("addApptBtn"); if (add) add.onclick = function () { openApptForm(null, null); };
+      var addE = el("addApptEmpty"); if (addE) addE.onclick = function () { openApptForm(null, null); };
+      bindApptRows();
+    }
+  };
+
+  function apptCard(title, list, warn, emptyMsg) {
+    var html = '<div class="card"><div class="card-head"><h2>' + esc(title) + " (" + list.length + ')</h2></div>';
+    if (list.length === 0) {
+      html += '<div class="card-body"><p class="muted" style="margin:0">' + esc(emptyMsg || "Nothing here.") + "</p></div></div>";
+      return html;
+    }
+    html += '<div class="table-wrap"><table class="data"><thead><tr><th>When</th><th>Patient</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>';
+    list.forEach(function (a) {
+      var p = S.getPatient(a.patientId);
+      html += '<tr class="row-click" data-appt="' + a.id + '">' +
+        "<td><div style=\"font-weight:600\">" + esc(relDay(a.date)) + (a.time ? " · " + esc(fmtTime(a.time)) : "") + "</div>" +
+        '<div class="mini muted">' + fmtDate(a.date) + "</div></td>" +
+        "<td>" + esc(p ? p.name : "—") + "</td>" +
+        '<td class="mini">' + (a.reason ? esc(a.reason) : '<span class="muted">—</span>') + "</td>" +
+        "<td>" + apptStatusBadge(a) + "</td>" +
+        '<td class="num" style="white-space:nowrap">' +
+        (a.status === "scheduled" ? '<button class="btn btn-outline btn-sm" data-done="' + a.id + '">✓ Done</button> ' : "") +
+        '<button class="btn btn-outline btn-sm" data-delappt="' + a.id + '">✕</button></td>' +
+        "</tr>";
+    });
+    html += "</tbody></table></div></div>";
+    return html;
+  }
+
+  function bindApptRows() {
+    document.querySelectorAll("[data-appt]").forEach(function (row) {
+      row.onclick = function (e) {
+        if (e.target.closest("[data-done]") || e.target.closest("[data-delappt]")) return;
+        openApptForm(row.dataset.appt, null);
+      };
+    });
+    document.querySelectorAll("[data-done]").forEach(function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        S.updateAppointment(b.dataset.done, { status: "completed" });
+        toast("Marked completed");
+        render();
+      };
+    });
+    document.querySelectorAll("[data-delappt]").forEach(function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        confirmDialog({ title: "Delete appointment?", message: "This appointment will be removed.", confirm: "Delete", danger: true }, function () {
+          S.deleteAppointment(b.dataset.delappt);
+          toast("Appointment deleted");
+          render();
+        });
+      };
+    });
+  }
+
+  function openApptForm(id, lockPatientId) {
+    var patients = S.patients();
+    if (patients.length === 0) {
+      confirmDialog({ title: "Add a patient first", message: "You need at least one patient before booking an appointment. Add one now?", confirm: "Add Patient" }, function () {
+        openPatientForm(null);
+      });
+      return;
+    }
+    var a = id ? S.getAppointment(id) : null;
+    var isEdit = !!a;
+    var f = a || {};
+    var pid = f.patientId || lockPatientId || patients[0].id;
+    var patientOptions = patients.map(function (p) {
+      return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + ">" + esc(p.name) + "</option>";
+    }).join("");
+    var statuses = [["scheduled", "Scheduled"], ["completed", "Completed"], ["cancelled", "Cancelled"]];
+
+    openModal(
+      '<div class="modal-head"><h2>' + (isEdit ? "Edit Appointment" : "New Appointment") + '</h2><button class="close-x" data-close>&times;</button></div>' +
+      '<div class="modal-body"><div class="form-grid">' +
+      field("Patient *", '<select id="aPatient">' + patientOptions + "</select>") +
+      field("Status", '<select id="aStatus">' + statuses.map(function (s) { return '<option value="' + s[0] + '"' + (f.status === s[0] ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select>") +
+      field("Date *", '<input id="aDate" type="date" value="' + esc(f.date || todayStr()) + '">') +
+      field("Time", '<input id="aTime" type="time" value="' + esc(f.time || "") + '">') +
+      field("Reason", '<input id="aReason" placeholder="e.g. Follow-up, new consultation" value="' + esc(f.reason || "") + '">', true) +
+      field("Notes", '<textarea id="aNotes" placeholder="Anything to remember for this appointment…">' + esc(f.notes || "") + "</textarea>", true) +
+      "</div></div>" +
+      '<div class="modal-foot">' +
+      (isEdit ? '<button class="btn btn-danger" id="aDelete" style="margin-right:auto">Delete</button>' : "") +
+      '<button class="btn btn-outline" data-close>Cancel</button>' +
+      '<button class="btn btn-primary" id="aSave">' + (isEdit ? "Save Changes" : "Book Appointment") + "</button></div>"
+    );
+
+    el("aSave").onclick = function () {
+      var date = el("aDate").value;
+      if (!date) { toast("Date is required", true); return; }
+      var data = {
+        patientId: el("aPatient").value,
+        status: el("aStatus").value,
+        date: date,
+        time: el("aTime").value,
+        reason: el("aReason").value.trim(),
+        notes: el("aNotes").value.trim()
+      };
+      if (isEdit) { S.updateAppointment(id, data); toast("Appointment updated"); }
+      else { S.addAppointment(data); toast("Appointment booked"); }
+      closeModal();
+      render();
+    };
+    var del = el("aDelete");
+    if (del) del.onclick = function () {
+      confirmDialog({ title: "Delete appointment?", message: "This appointment will be removed.", confirm: "Delete", danger: true }, function () {
+        S.deleteAppointment(id);
+        closeModal();
+        toast("Appointment deleted");
+        render();
+      });
+    };
   }
 
   // ---------- Settings ----------
