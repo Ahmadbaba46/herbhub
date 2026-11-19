@@ -1,10 +1,25 @@
 # 🌿 HerbHub — Herbal Practice Manager
 
-A simple, self-contained web app for an herbal practitioner to keep patient
-records, maintain a catalog of remedies, record visits, and track income.
+HerbHub is a practice manager for an herbal practitioner, their helpers, and
+their patients.
 
-No installation, no server, no database setup. Just open `index.html` in a web
-browser and start using it.
+**The full app (in progress)** is a **Flutter + Supabase** app (Material design,
+mobile-first, English / Hausa / Arabic) with patient records, remedies &
+services, helper job assignment, WhatsApp-style chat, appointments, and payments.
+
+- App code: [`app/`](app/) · Database: [`supabase/`](supabase/)
+- Data model: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)
+- Build plan & phases: [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md)
+- Approved UI design (clickable): https://claude.ai/artifact/PfMaVdWp2KggoxhTD55kNi
+
+---
+
+## v1 — offline browser tool (below)
+
+The original single-file browser app still lives in this repo. It needs no
+installation or server — just open `index.html` — and keeps patient records,
+remedies, visits, appointments and income in your browser. It's a good quick
+tool for a solo practitioner while the full app is built.
 
 ## Features
 
