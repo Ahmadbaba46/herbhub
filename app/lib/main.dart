@@ -11,7 +11,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final configured = supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty;
   if (configured) {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+    await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
   }
   runApp(ProviderScope(child: HerbHubApp(configured: configured)));
 }
