@@ -335,8 +335,8 @@ begin
     coalesce(new.raw_user_meta_data->>'display_name', ''),
     new.email,
     new.phone,
-    case when first_user then 'owner' else 'patient' end,
-    case when first_user then 'active' else 'pending' end
+    (case when first_user then 'owner' else 'patient' end)::public.app_role,
+    (case when first_user then 'active' else 'pending' end)::public.account_status
   );
   return new;
 end; $$;
